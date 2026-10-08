@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predictive Maintenance Control Room</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100 min-h-screen p-4 md:p-8 font-sans selection:bg-blue-500 selection:text-white">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <div class="flex flex-col md:flex-row justify-between items-center bg-gray-800/50 backdrop-blur-sm border border-gray-700 p-5 rounded-xl shadow-2xl gap-4">
+            <div class="flex items-center space-x-4 w-full md:w-auto">
+                <div class="p-2 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                    <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <select id="applianceSelect" class="bg-gray-900 border border-gray-600 text-white font-semibold py-2.5 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full md:w-64 transition-all hover:bg-gray-800">
+                    <option value="fridge">Refrigerator (Meter 12)</option>
+                    <option value="washing_machine">Washing Machine (Meter 10)</option>
+                    <option value="dishwasher">Dishwasher (Meter 6)</option>
+                    <option value="microwave">Microwave (Meter 13)</option>
+                    <option value="kettle">Kettle (Meter 14)</option>
+                </select>
+            </div>
+            <div class="flex space-x-3 w-full md:w-auto">
+                <button onclick="fetchData(false)" class="flex-1 md:flex-none bg-gray-700 hover:bg-gray-600 border border-gray-600 text-white font-semibold py-2.5 px-6 rounded-lg transition-all shadow-lg hover:shadow-gray-700/50">
+                    Load Baseline
+                </button>
+                <button onclick="fetchData(true)" class="flex-1 md:flex-none bg-red-600/90 hover:bg-red-500 border border-red-500 text-white font-semibold py-2.5 px-6 rounded-lg transition-all shadow-lg hover:shadow-red-500/25">
+                    Simulate Failure
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-col md:flex-row justify-between items-center bg-gray-800/40 border border-gray-700 p-6 rounded-xl shadow-2xl relative overflow-hidden" id="headerCard">
+            <div id="glowEffect" class="absolute -right-20 -top-20 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none transition-colors duration-500"></div>
+            <div class="z-10 w-full md:w-auto mb-4 md:mb-0">
+                <h1 id="applianceTitle" class="text-4xl font-extrabold text-white tracking-tight">Appliance Monitor</h1>
+                <p class="text-gray-400 mt-1 font-medium tracking-wide">UK-DALE HOUSE 1 &bull; LIVE TELEMETRY</p>
+            </div>
+            <div class="z-10 text-left md:text-right w-full md:w-auto flex flex-col md:items-end">
+                <p class="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">System Status</p>
+                <div class="flex items-center gap-3">
+                    <span id="statusPing" class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                    </span>
+                    <p id="statusText" class="text-2xl font-bold text-blue-400">Awaiting Data...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-gray-800/40 border border-gray-700 p-8 rounded-xl shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+                <span class="text-gray-400 text-sm uppercase tracking-widest font-bold">Asset Health Score</span>
+                <div class="flex items-baseline gap-1 mt-2">
+                    <span id="healthScore" class="text-6xl font-black text-white">--</span>
+                    <span class="text-2xl text-gray-500 font-bold">%</span>
+                </div>
+            </div>
+            <div class="bg-gray-800/40 border border-gray-700 p-8 rounded-xl shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+                <span class="text-gray-400 text-sm uppercase tracking-widest font-bold">Anomalies Detected</span>
+                <span id="anomalyCount" class="text-6xl font-black text-white mt-2">--</span>
+            </div>
+            <div class="bg-gray-800/40 border border-gray-700 p-8 rounded-xl shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+                <span class="text-gray-400 text-sm uppercase tracking-widest font-bold">Expected Peak Power</span>
+                <div class="flex items-baseline gap-1 mt-2">
+                    <span id="expectedWatts" class="text-4xl md:text-5xl font-black text-blue-400">--</span>
+                    <span class="text-xl text-gray-500 font-bold ml-1">W</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800/40 border border-gray-700 p-6 rounded-xl shadow-2xl relative">
+            <div class="absolute top-6 left-6 flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Power Draw Timeline</span>
+            </div>
+            <div class="w-full h-[450px] mt-8">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const ctx = document.getElementById('myChart').getContext('2d');
+        
+        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.5)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+        let myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Power Draw (Watts)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    pointBackgroundColor: [],
+                    pointBorderColor: 'transparent',
+                    pointRadius: [],
+                    pointHoverRadius: 6,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'nearest', intersect: true },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                        titleColor: '#9CA3AF',
+                        bodyColor: '#F3F4F6',
+                        borderColor: '#374151',
+                        borderWidth: 1,
+                        padding: 12,
+                        displayColors: false
+                    }
+                },
+                scales: {
+                    y: { 
+                        beginAtZero: true, 
+                        grid: { color: 'rgba(55, 65, 81, 0.5)', drawBorder: false },
+                        ticks: { color: '#9CA3AF', font: { family: 'ui-sans-serif, system-ui' } }
+                    },
+                    x: { 
+                        grid: { display: false }, 
+                        ticks: { maxTicksLimit: 8, color: '#6B7280', font: { family: 'ui-sans-serif, system-ui' } }
+                    }
+                }
+            }
+        });
+
+        const EXPECTED_POWER = {
+            'fridge': '150 - 300',
+            'washing_machine': '2,000 - 2500',
+            'dishwasher': '2,500 - 3,000',
+            'microwave': '1,200 - 1500',
+            'kettle': '2,500 - 3,000'
+        };
+
+        async function fetchData(simulateFault) {
+            const appliance = document.getElementById('applianceSelect').value;
+            
+            try {
+                const response = await fetch(`http://localhost:5000/api/predict?appliance=${appliance}&fault=${simulateFault}`);
+                const data = await response.json();
+
+                document.getElementById('applianceTitle').innerText = data.appliance_name;
+                document.getElementById('healthScore').innerText = data.overall_health;
+                document.getElementById('anomalyCount').innerText = data.anomaly_count;
+                document.getElementById('expectedWatts').innerText = EXPECTED_POWER[appliance];
+                
+                const statusEl = document.getElementById('statusText');
+                const headerEl = document.getElementById('headerCard');
+                const glowEl = document.getElementById('glowEffect');
+                const pingOuter = document.querySelector('#statusPing span:nth-child(1)');
+                const pingInner = document.querySelector('#statusPing span:nth-child(2)');
+                
+                if (data.status === "Healthy") {
+                    statusEl.innerText = "Running Optimally";
+                    statusEl.className = "text-2xl font-bold text-emerald-400";
+                    headerEl.className = "flex flex-col md:flex-row justify-between items-center bg-gray-800/40 border border-emerald-900/50 p-6 rounded-xl shadow-2xl relative overflow-hidden ring-1 ring-emerald-500/20";
+                    glowEl.className = "absolute -right-20 -top-20 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none transition-colors duration-500";
+                    pingOuter.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75";
+                    pingInner.className = "relative inline-flex rounded-full h-3 w-3 bg-emerald-500";
+                } else if (data.status === "Degraded") {
+                    statusEl.innerText = "Degraded Performance";
+                    statusEl.className = "text-2xl font-bold text-amber-400";
+                    headerEl.className = "flex flex-col md:flex-row justify-between items-center bg-gray-800/40 border border-amber-900/50 p-6 rounded-xl shadow-2xl relative overflow-hidden ring-1 ring-amber-500/20";
+                    glowEl.className = "absolute -right-20 -top-20 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none transition-colors duration-500";
+                    pingOuter.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75";
+                    pingInner.className = "relative inline-flex rounded-full h-3 w-3 bg-amber-500";
+                } else {
+                    statusEl.innerText = "Imminent Failure Detected";
+                    statusEl.className = "text-2xl font-bold text-red-500";
+                    headerEl.className = "flex flex-col md:flex-row justify-between items-center bg-gray-800/40 border border-red-900/50 p-6 rounded-xl shadow-2xl relative overflow-hidden ring-1 ring-red-500/20";
+                    glowEl.className = "absolute -right-20 -top-20 w-64 h-64 bg-red-500/20 rounded-full blur-3xl pointer-events-none transition-colors duration-500";
+                    pingOuter.className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75";
+                    pingInner.className = "relative inline-flex rounded-full h-3 w-3 bg-red-600";
+                }
+
+                const baseColor = simulateFault ? '#ef4444' : '#3b82f6';
+                const rgbaColor = simulateFault ? 'rgba(239, 68, 68, 0.5)' : 'rgba(59, 130, 246, 0.5)';
+                
+                let updatedGradient = ctx.createLinearGradient(0, 0, 0, 400);
+                updatedGradient.addColorStop(0, rgbaColor);
+                updatedGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                const anomalyColor = simulateFault ? '#facc15' : '#ef4444';
+                const pointColors = data.anomalies.map(a => a === -1 ? anomalyColor : baseColor);
+                const pointRadii = data.anomalies.map(a => a === -1 ? 6 : 0);
+
+                myChart.data.labels = data.timestamps;
+                myChart.data.datasets[0].data = data.power_draw;
+                myChart.data.datasets[0].pointBackgroundColor = pointColors;
+                myChart.data.datasets[0].pointRadius = pointRadii;
+                myChart.data.datasets[0].borderColor = baseColor;
+                myChart.data.datasets[0].backgroundColor = updatedGradient;
+                myChart.update();
+
+            } catch (error) {
+                alert("Failed to connect to backend. Is app.py running?");
+            }
+        }
+
+        window.onload = () => fetchData(false);
+    </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# Create a virtual environment named 'venv'
+python -m venv venv
+
+# Activate it (Windows)
+.\venv\Scripts\activate
+
+# Install the necessary libraries
+pip install pandas scikit-learn matplotlib tables ipykernel
